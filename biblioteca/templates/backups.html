@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<header class="cabecalho-pagina">
+  <div><h1 class="titulo-pagina">Backups e exportação</h1><p class="descricao">Cópias de segurança dos dados e planilhas para o Excel.</p></div>
+  <div class="acoes-pagina"><a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">Voltar ao painel</a></div>
+</header>
+<div class="duas-colunas">
+  <section class="card"><div class="card-body">
+    <h2 class="h-secao mb-1">Exportar para o Excel</h2>
+    <p class="texto-secundario mb-3">Arquivos CSV, que o Excel abre normalmente.</p>
+    <div class="d-grid gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.exportar', tabela='livros') }}">Livros</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.exportar', tabela='pessoas') }}">Alunos e professores</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.exportar', tabela='emprestimos') }}">Histórico de empréstimos</a>
+    </div>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <h2 class="h-secao">Backups</h2>
+      <form action="{{ url_for('main.criar_backup') }}" method="post" class="m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-primary" type="submit">Fazer backup agora</button></form>
+    </div>
+    <p class="texto-secundario {{ 'text-danger' if dias is none or dias >= 7 }}">{% if dias is none %}Nenhum backup feito ainda.{% else %}Último backup há {{ dias }} dia(s).{% endif %} Copie os arquivos para um pendrive de vez em quando.</p>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Arquivo</th><th>Data</th><th>Tamanho</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for b in backups %}<tr><td class="nome-principal">{{ b.nome }}</td><td class="text-nowrap">{{ b.quando.strftime('%d/%m/%Y %H:%M') }}</td><td class="text-nowrap">{{ b.kb }} KB</td>
+          <td class="text-end"><div class="acoes-linha">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.baixar_backup', nome=b.nome) }}">Baixar</a>
+            <form action="{{ url_for('main.restaurar', nome=b.nome) }}" method="post" class="m-0" data-confirmar="Restaurar este backup? Os dados atuais serão substituídos (uma cópia deles é feita antes)."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger" type="submit">Restaurar</button></form>
+          </div></td></tr>
+        {% else %}<tr><td colspan="4" class="vazio">Nenhum backup ainda.</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div></section>
+</div>
+{% endblock %}

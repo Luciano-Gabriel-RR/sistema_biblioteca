@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Emblema CEPI: sol nascendo sobre um livro aberto">
+  <title>CEPI · Centro de Ensino em Período Integral</title>
+  <!-- Emblema próprio do sistema (não é a marca oficial do Governo de Goiás/Seduc).
+       Para usar a marca oficial, basta substituir este arquivo mantendo o nome logo-cepi.svg. -->
+  <circle cx="32" cy="32" r="30" fill="#0B6B3A" stroke="#F2B705" stroke-width="3"/>
+  <!-- raios do sol: o dia inteiro na escola -->
+  <g stroke="#F2B705" stroke-width="2.6" stroke-linecap="round">
+    <line x1="49" y1="30" x2="44" y2="30"/>
+    <line x1="46.5" y1="21.5" x2="42.4" y2="24.4"/>
+    <line x1="40.5" y1="15.5" x2="37.6" y2="19.6"/>
+    <line x1="32" y1="13" x2="32" y2="18"/>
+    <line x1="23.5" y1="15.5" x2="26.4" y2="19.6"/>
+    <line x1="17.5" y1="21.5" x2="21.6" y2="24.4"/>
+    <line x1="15" y1="30" x2="20" y2="30"/>
+  </g>
+  <circle cx="32" cy="31" r="8" fill="#F2B705"/>
+  <!-- livro aberto por cima do sol -->
+  <path d="M10 39 Q21 35 32 39 V52 Q21 48 10 52 Z" fill="#FFFFFF"/>
+  <path d="M54 39 Q43 35 32 39 V52 Q43 48 54 52 Z" fill="#FFFFFF"/>
+  <path d="M32 39 V52" stroke="#0B6B3A" stroke-width="1.6"/>
+</svg>

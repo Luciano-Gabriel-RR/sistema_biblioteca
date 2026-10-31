@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<header class="cabecalho-pagina">
+  <div><h1 class="titulo-pagina">Virada de ano</h1><p class="descricao">Passe cada turma para a série do próximo ano e dê baixa em quem saiu da escola.</p></div>
+  <div class="acoes-pagina"><a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Voltar aos cadastros</a></div>
+</header>
+<section class="card" style="max-width: 980px"><div class="card-body">
+  <p class="texto-secundario">A letra da turma é mantida (8º ano A vai para o 9º ano A, 8º ano B para o 9º ano B). A escolha da linha vale para <strong>todos</strong> os alunos da turma. Se só alguns alunos fogem da regra, abra <strong>Ver os alunos</strong> e marque cada um: <strong>Saiu da escola</strong> arquiva só aquele aluno (o histórico dele fica guardado) e <strong>Fica na turma atual</strong> serve para quem vai repetir o ano. Uma cópia de segurança é feita antes de aplicar.</p>
+  {% if turmas %}
+  <form method="post" id="formVirada" data-confirmar="Aplicar a virada de ano? Confira antes os alunos que saíram da escola ou vão repetir o ano."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="tabela-caixa mb-3" style="max-height: none"><div class="table-responsive"><table class="table align-middle mb-0">
+      <thead><tr><th>Turma atual</th><th>Alunos</th><th>Próxima série (a turma toda)</th></tr></thead>
+      {% for t in turmas %}
+      <tbody class="turma-bloco">
+        <tr>
+          <td class="nome-principal border-bottom-0">{{ t.turma }}<input type="hidden" name="de" value="{{ t.turma }}"></td>
+          <td class="border-bottom-0">{{ t.total }}</td>
+          <td class="border-bottom-0"><select name="para" class="form-select" aria-label="Próxima série de {{ t.turma }}">
+            <option value="__manter__" {% if t.sugestao == '__manter__' %}selected{% endif %}>Manter na turma atual</option>
+            <option value="" {% if t.sugestao == '' %}selected{% endif %}>Arquivar a turma toda (saiu da escola)</option>
+            {% for serie in series %}<option {% if serie == t.sugestao %}selected{% endif %}>{{ serie }}</option>{% endfor %}</select></td>
+        </tr>
+        <tr>
+          <td colspan="3" class="pt-0">
+            <details>
+              <summary class="texto-secundario">Ver os {{ t.total }} aluno{{ '' if t.total == 1 else 's' }}<span class="fw-semibold" data-resumo></span></summary>
+              <div class="mt-2">
+                {% for a in t.alunos %}
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 border-top">
+                  <div><span class="nome-principal">{{ a.nome }}</span>
+                    {% if a.matricula %}<span class="texto-secundario"> · matrícula {{ a.matricula }}</span>{% endif %}
+                    {% if a.emprestados %}<span class="selo selo-alerta ms-1" title="Precisa devolver antes de ser arquivado">{{ a.emprestados }} livro{{ '' if a.emprestados == 1 else 's' }} emprestado{{ '' if a.emprestados == 1 else 's' }}</span>{% endif %}</div>
+                  <select name="aluno_{{ a.id }}" class="form-select form-select-sm w-auto" style="min-width: 15rem" aria-label="O que fazer com {{ a.nome }}">
+                    <option value="" selected>Acompanha a turma</option>
+                    <option value="arquivar">Saiu da escola (arquivar)</option>
+                    <option value="manter">Fica na turma atual</option>
+                  </select>
+                </div>
+                {% endfor %}
+              </div>
+            </details>
+          </td>
+        </tr>
+      </tbody>
+      {% endfor %}
+    </table></div></div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary" type="submit">Aplicar virada de ano</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Cancelar</a>
+    </div>
+  </form>
+  {% else %}
+  <p class="texto-secundario mb-3">Não há alunos ativos com turma cadastrada.</p>
+  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Voltar</a>
+  {% endif %}
+</div></section>
+{% endblock %}
+{% block scripts %}
+<script>
+  // Mostra, na linha da turma, quantas decisões individuais foram marcadas (a lista fica recolhida)
+  document.querySelectorAll(".turma-bloco").forEach(bloco => {
+    const resumo = bloco.querySelector("[data-resumo]");
+    const atualizar = () => {
+      const marcados = Array.from(bloco.querySelectorAll('select[name^="aluno_"]')).map(s => s.value);
+      const saem = marcados.filter(v => v === "arquivar").length, ficam = marcados.filter(v => v === "manter").length;
+      const partes = [];
+      if (saem) partes.push(saem + (saem === 1 ? " sai da escola" : " saem da escola"));
+      if (ficam) partes.push(ficam + (ficam === 1 ? " fica na turma atual" : " ficam na turma atual"));
+      resumo.textContent = partes.length ? " · " + partes.join(", ") : "";
+    };
+    bloco.addEventListener("change", atualizar);
+  });
+</script>
+{% endblock %}

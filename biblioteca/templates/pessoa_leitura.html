@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<header class="cabecalho-pagina">
+  <div><h1 class="titulo-pagina">Leitura de {{ pessoa.nome }}</h1>
+    <p class="descricao">{{ pessoa.tipo }}{% if pessoa.turma %}, {{ pessoa.turma }}{% elif pessoa.disciplina %}, {{ pessoa.disciplina }}{% endif %}. Gêneros dos livros que pegou emprestados.</p></div>
+  <div class="acoes-pagina"><a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Voltar às pessoas</a></div>
+</header>
+
+<div class="indicadores quatro mb-4">
+  <div class="indicador"><div class="indicador-rotulo">Empréstimos</div><div class="indicador-valor">{{ leitura.emprestimos }}</div></div>
+  <div class="indicador"><div class="indicador-rotulo">Com gênero definido</div><div class="indicador-valor">{{ leitura.total }}</div></div>
+  <div class="indicador"><div class="indicador-rotulo">Gênero preferido</div><div class="indicador-valor" style="font-size: 1.35rem">{{ leitura['itens'][0].genero if leitura['itens'] else '—' }}</div>{% if leitura['itens'] and leitura.confiavel %}<div class="texto-secundario">{{ leitura['itens'][0].pct }}% dos empréstimos</div>{% endif %}</div>
+  <div class="indicador"><div class="indicador-rotulo">Gêneros diferentes</div><div class="indicador-valor">{{ leitura['itens'] | length }}</div></div>
+</div>
+
+{% if leitura.emprestimos == 0 %}
+<div class="alert alert-info">Esta pessoa ainda não pegou nenhum livro emprestado.</div>
+{% elif not leitura.confiavel %}
+<div class="alert alert-warning">Só {{ leitura.total }} empréstimo(s) com gênero definido. Com menos de {{ leitura.min }}, o gênero preferido é quase acaso, então trate como pista e não como perfil.</div>
+{% endif %}
+{% if leitura.sem_genero %}
+<p class="texto-secundario">{{ leitura.sem_genero }} empréstimo(s) são de livros sem gênero e não entram na conta.</p>
+{% endif %}
+
+<section class="card tom-azul mb-4"><div class="card-body">
+  <h2 class="h-secao">Gêneros mais pegos</h2>
+  <p class="texto-secundario mt-1 mb-2">Empréstimos por gênero, devolvidos ou em aberto</p>
+  {% set maximo = leitura['itens'][0].emprestimos if leitura['itens'] else 1 %}
+  {% for x in leitura['itens'] %}
+  <div class="item-rank">
+    <div class="linha-rank"><span class="rank-nome">{{ loop.index }}. {{ x.genero }}</span><span class="rank-valor">{{ x.emprestimos }}</span></div>
+    <div class="barra-progresso" role="progressbar" aria-valuenow="{{ x.emprestimos }}" aria-valuemin="0" aria-valuemax="{{ maximo }}"><span style="width: {{ (100 * x.emprestimos / maximo) | round | int }}%"></span></div>
+    <div class="texto-secundario">{{ x.titulos }} livro(s) diferente(s)</div>
+  </div>
+  {% else %}<p class="texto-secundario mb-0">Nenhum empréstimo de livro com gênero definido.</p>{% endfor %}
+</div></section>
+
+<p class="texto-secundario">Serve para sugerir leituras no balcão. “Lido” quer dizer “levado emprestado”: o sistema não sabe se a pessoa terminou o livro.</p>
+{% endblock %}

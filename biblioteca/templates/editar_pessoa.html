@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block conteudo %}
+{% set tipo = request.form.get('tipo', pessoa.tipo) %}
+<header class="cabecalho-pagina">
+  <div><h1 class="titulo-pagina">Editar cadastro</h1><p class="descricao">{{ pessoa.nome }}</p></div>
+  <div class="acoes-pagina"><a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Voltar aos cadastros</a></div>
+</header>
+<section class="card" style="max-width: 760px"><div class="card-body">
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grade-form">
+      <div class="mb-3"><label class="form-label" for="tipo">Tipo</label>
+        <select id="tipo" name="tipo" class="form-select">
+          <option {% if tipo == 'Aluno' %}selected{% endif %}>Aluno</option>
+          <option {% if tipo == 'Professor' %}selected{% endif %}>Professor</option>
+        </select></div>
+      <div class="mb-3"><label class="form-label" for="nome">Nome completo</label><input id="nome" name="nome" class="form-control" value="{{ request.form.get('nome', pessoa.nome) }}" required></div>
+      <div class="mb-3 campo-inteiro"><label class="form-label" for="email">E-mail</label><input id="email" type="email" name="email" class="form-control" value="{{ request.form.get('email', pessoa.email) }}" required></div>
+      <div class="mb-3" id="campo-matricula"><label class="form-label" for="matricula">Matrícula</label><input id="matricula" name="matricula" class="form-control" value="{{ request.form.get('matricula', pessoa.matricula or '') }}"></div>
+      <div class="mb-3" id="campo-turma"><label class="form-label" for="serie">Série e turma</label>
+        {% set serie = request.form.get('serie', serie_atual) %}
+        <div class="campo-serie"><select id="serie" name="serie" class="form-select">{% if not serie %}<option value="" selected>Escolha a série</option>{% endif %}{% for s in series %}<option {% if s == serie %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+        {% set lsel = request.form.get('letra', letra_atual) %}
+        <select name="letra" class="form-select" aria-label="Turma">{% if lsel not in letras %}<option value="{{ lsel }}" selected>{{ ('Turma ' ~ lsel) if lsel else 'Sem letra' }}</option>{% endif %}{% for l in letras %}<option value="{{ l }}"{% if l == lsel %} selected{% endif %}>Turma {{ l }}</option>{% endfor %}</select></div></div>
+      <div class="mb-3 campo-inteiro" id="campo-disciplina"><label class="form-label" for="disciplina">Disciplina</label><input id="disciplina" name="disciplina" class="form-control" value="{{ request.form.get('disciplina', pessoa.disciplina or '') }}"></div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary" type="submit">Salvar alterações</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Cancelar</a>
+    </div>
+  </form>
+</div></section>
+{% endblock %}
+{% block scripts %}
+<script>
+  const tipo = document.getElementById("tipo");
+  function atualizar() {
+    const aluno = tipo.value === "Aluno";
+    document.getElementById("campo-turma").classList.toggle("d-none", !aluno);
+    document.getElementById("campo-matricula").classList.toggle("d-none", !aluno);
+    document.getElementById("campo-disciplina").classList.toggle("d-none", aluno);
+  }
+  tipo.addEventListener("change", atualizar); atualizar();
+</script>
+{% endblock %}

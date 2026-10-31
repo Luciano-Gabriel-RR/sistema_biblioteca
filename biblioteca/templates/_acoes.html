@@ -1,0 +1,16 @@
+{% macro acoes_conta() %}
+<button type="button" id="tema" class="btn btn-sm btn-outline-secondary">Modo escuro</button>
+{% if config.get('MODO_PROGRAMA') and session.get('bibliotecario') %}
+<form action="{{ url_for('main.encerrar') }}" method="post" class="d-inline" data-confirmar="Encerrar o sistema? Será preciso abri-lo de novo para voltar a usar.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-danger">Encerrar</button>
+</form>
+{% endif %}
+{% if session.get('bibliotecario') %}
+<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.backups') }}">Backups e exportação</a>
+<form action="{{ url_for('auth.sair') }}" method="post" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary">Sair ({{ session.get('bibliotecario') }})</button>
+</form>
+{% endif %}
+{% endmacro %}

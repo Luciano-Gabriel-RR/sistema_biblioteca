@@ -1,0 +1,23 @@
+# Dados reais da escola, backups, logs e chave de sessão: nunca vão para o GitHub
+dados/
+dados_teste/secret.key
+dados_teste/*.log
+dados_teste/backups/
+
+# Python / ambiente
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Executável e instalador (gerados por construir_exe.bat)
+build/
+dist/
+*.spec
+
+# Bootstrap baixado por baixar_bootstrap.py
+biblioteca/static/bootstrap*
+
+# Editor / sistema
+.vscode/
+.DS_Store

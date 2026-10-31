@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<header class="cabecalho-pagina">
+  <div><h1 class="titulo-pagina">Livros atrasados</h1><p class="descricao">{{ nome_biblioteca }}, em {{ hoje | data_br }}</p></div>
+  <div class="acoes-pagina d-print-none">
+    <button class="btn btn-primary" onclick="window.print()">Imprimir</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#emprestimos">Voltar</a>
+  </div>
+</header>
+{% for grupo, itens in atrasados | groupby('grupo') %}
+<section class="mb-4">
+  <h2 class="h-secao mb-2">{{ grupo }}</h2>
+  <div class="tabela-caixa"><div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Pessoa</th><th>Livro</th><th>Devolver até</th><th>Dias de atraso</th></tr></thead>
+    <tbody>{% for x in itens %}<tr><td class="nome-principal">{{ x.usuario_nome }}</td><td>{{ x.livro_titulo }}</td><td class="text-nowrap">{{ x.data_prevista | data_br }}</td><td><span class="selo selo-perigo">{{ x.dias }}</span></td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</section>
+{% else %}
+<div class="tabela-caixa"><p class="vazio mb-0">Nenhum livro atrasado. Tudo em dia.</p></div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,36 @@
+﻿BIBLIOTECA PRÉ UNIVERSITÁRIO — VERSÃO PARA WINDOWS 10
+
+INSTALAR (uma vez)
+ 1. Extraia o arquivo .zip para uma pasta, por exemplo C:\Biblioteca
+    (clique com o botão direito no .zip > "Extrair tudo"). Não rode de dentro do .zip.
+ 2. Dê dois cliques em  instalar_windows.bat
+    Ele instala o Python se precisar (é preciso internet), prepara tudo e cria os ícones
+    na área de trabalho e no menu Iniciar.
+ 3. Abra pelo ícone "Biblioteca Pré Universitário". O sistema abre numa janela própria,
+    sem barra de endereço. Ao fechar a janela, o sistema encerra.
+
+NA PRIMEIRA VEZ
+ O sistema pede para criar a conta do bibliotecário (usuário e senha de 8 ou mais letras/números).
+
+DADOS DE TESTE
+ O ícone laranja "Biblioteca Pré Universitário (TESTE)" abre o sistema com dados de exemplo,
+ sem mexer nos dados reais. Ele tem login próprio (crie uma conta de teste).
+
+ABRIR SOZINHO AO LIGAR O COMPUTADOR
+ Rode  instalar_windows.bat /autostart  (no Prompt de Comando, dentro da pasta).
+
+ONDE FICAM OS DADOS E OS BACKUPS
+ Na pasta "dados" (dentro da pasta do sistema). Use o botão "Backups e exportação" no topo do sistema.
+ Copie a pasta "dados" de vez em quando para um pendrive.
+
+SE ALGO NÃO FUNCIONAR
+ - Confira se o Microsoft Edge ou o Google Chrome está instalado (o Edge já vem no Windows 10).
+ - O arquivo  dados\programa.log  registra os erros.
+ - Windows pode mostrar o aviso "O Windows protegeu o seu computador" ao abrir os arquivos:
+   clique em "Mais informações" > "Executar assim mesmo".
+
+REMOVER
+ Apague a pasta do sistema e os ícones da área de trabalho. Guarde antes a pasta "dados", se quiser manter os cadastros.
+
+PROGRAMA SEM PYTHON (opcional)
+ construir_exe.bat cria um "Biblioteca.exe" que roda em computadores sem Python (ainda não foi testado em todos os casos).

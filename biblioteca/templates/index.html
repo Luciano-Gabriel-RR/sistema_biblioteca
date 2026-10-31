@@ -1,0 +1,787 @@
+{% extends "base.html" %}
+{% from "_acoes.html" import acoes_conta with context %}
+{% macro excluir(rota, id, texto) %}
+<form action="{{ url_for(rota, **{'livro_id' if rota == 'main.excluir_livro' else 'pessoa_id': id}) }}" method="post" class="m-0" data-confirmar="{{ texto }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="dropdown-item text-danger">Excluir</button>
+</form>
+{% endmacro %}
+{% macro menu_linha() %}
+<div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle-no-caret" type="button" data-menu-linha data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais ações">&#8943;</button>
+  <ul class="dropdown-menu dropdown-menu-end">{{ caller() }}</ul></div>
+{% endmacro %}
+{% macro paginacao(d, param, aba, args) %}
+{% if d.paginas > 1 %}
+<nav class="paginacao" aria-label="Páginas">
+  <span>Página {{ d.pagina }} de {{ d.paginas }}, {{ d.total }} registros</span>
+  <div class="d-flex gap-2">
+    {% if d.pagina > 1 %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.index', **dict(args, **{param: d.pagina - 1})) }}#{{ aba }}">Anterior</a>{% endif %}
+    {% if d.pagina < d.paginas %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.index', **dict(args, **{param: d.pagina + 1})) }}#{{ aba }}">Próxima</a>{% endif %}
+  </div>
+</nav>
+{% endif %}
+{% endmacro %}
+{% macro cartao_rank(titulo, descricao, itens, campo, tom, vazio) %}
+<section class="card tom-{{ tom }}"><div class="card-body">
+  <h3 class="h-secao">{{ titulo }}</h3>
+  <p class="texto-secundario mt-1 mb-2">{{ descricao }}</p>
+  {% for x in itens %}
+  <div class="item-rank">
+    <div class="linha-rank">
+      <span class="rank-nome" title="{{ x.nome }}">{{ x.nome }}{% if x.tipo == 'Aluno' and x.turma %} <span class="texto-secundario fw-normal">{{ x.turma }}</span>{% endif %}</span>
+      <span class="rank-valor">{{ x[campo] }}%</span>
+    </div>
+    <div class="barra-progresso" role="progressbar" aria-valuenow="{{ x[campo] }}" aria-valuemin="0" aria-valuemax="100"><span style="width: {{ x[campo] }}%"></span></div>
+    <div class="texto-secundario">{{ x.entregues }} entrega(s): {{ x.atrasadas }} atrasada(s), {{ x.defeitos }} com defeito</div>
+  </div>
+  {% else %}<p class="texto-secundario mb-0">{{ vazio }}</p>{% endfor %}
+</div></section>
+{% endmacro %}
+
+{% block topo %}{% endblock %}
+{% block main_classe %}app{% endblock %}
+
+{% block conteudo %}
+{% set args = request.args.to_dict() %}
+{% set atrasos = emprestimos | rejectattr('dias_restantes', 'none') | selectattr('dias_restantes', 'lt', 0) | list %}
+{% set cadastro_ok = usuarios and todos_livros %}
+
+<aside class="menu d-print-none" aria-label="Seções do sistema">
+  <a class="marca" href="{{ url_for('main.index') }}"><img class="marca-logo" src="{{ url_for('static', filename='logo-cepi.svg') }}" alt="" width="40" height="40"><span class="marca-texto">{{ nome_biblioteca }}<small>CEPI · Goiás</small></span></a>
+  <div class="nav" role="tablist">
+    <div class="menu-grupo">
+      <p class="menu-titulo">Balcão</p>
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#painel" type="button" role="tab">Painel</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emprestimos" type="button" role="tab">Empréstimos{% if atrasos %} <span class="contador" title="Empréstimos atrasados">{{ atrasos | length }}</span>{% endif %}</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#reservas" type="button" role="tab">Reservas</button>
+      <a class="nav-link" href="{{ url_for('main.balcao') }}">Atendimento</a>
+    </div>
+    <div class="menu-grupo">
+      <p class="menu-titulo">Acervo</p>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#livros" type="button" role="tab">Livros</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#autores" type="button" role="tab">Autores</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sugestoes" type="button" role="tab">Sugestões de livros</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#maissugeridos" type="button" role="tab">Mais sugeridos</button>
+    </div>
+    <div class="menu-grupo">
+      <p class="menu-titulo">Pessoas</p>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#pessoas" type="button" role="tab">Alunos e professores</button>
+    </div>
+    <div class="menu-grupo">
+      <p class="menu-titulo">Análises</p>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#historico" type="button" role="tab">Histórico</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#comportamento" type="button" role="tab">Comportamento</button>
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#generos" type="button" role="tab">Gêneros lidos</button>
+    </div>
+  </div>
+  <div class="menu-rodape">{{ acoes_conta() }}</div>
+</aside>
+
+<div class="area">
+<div class="area-interna tab-content">
+
+  <!-- ===================== PAINEL ===================== -->
+  <div class="tab-pane fade show active" id="painel" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Painel</h1><p class="descricao">{{ hoje | data_br }}. Como a biblioteca está hoje.</p></div>
+      <div class="acoes-pagina">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoEmprestimo">Novo empréstimo</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalNovoLivro">Cadastrar livro</button>
+      </div>
+    </header>
+
+    {% if aviso_backup is none or aviso_backup >= dias_alerta %}
+    <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <span>{% if aviso_backup is none %}Ainda não há nenhum backup dos dados.{% else %}O último backup foi há {{ aviso_backup }} dias.{% endif %}</span>
+      <a class="btn btn-sm btn-warning" href="{{ url_for('main.backups') }}">Fazer backup</a>
+    </div>
+    {% endif %}
+
+    <div class="indicadores">
+      <a class="indicador" href="#emprestimos" data-abrir="emprestimos" style="--ind: var(--primaria)"><div class="indicador-rotulo">Emprestados agora</div><div class="indicador-valor">{{ painel.emprestados }}</div></a>
+      <a class="indicador {{ 'indicador-alerta' if painel.atrasados }}" href="{{ url_for('main.atrasados') }}" style="--ind: var(--perigo)"><div class="indicador-rotulo">Atrasados</div><div class="indicador-valor">{{ painel.atrasados }}</div></a>
+      <a class="indicador" href="#reservas" data-abrir="reservas" style="--ind: var(--info)"><div class="indicador-rotulo">Reservas para retirar</div><div class="indicador-valor">{{ painel.retirada }}</div></a>
+      <a class="indicador" href="#reservas" data-abrir="reservas" style="--ind: var(--info)"><div class="indicador-rotulo">Na fila de espera</div><div class="indicador-valor">{{ painel.fila }}</div></a>
+      <a class="indicador" href="#livros" data-abrir="livros" style="--ind: var(--acervo)"><div class="indicador-rotulo">Títulos no acervo</div><div class="indicador-valor">{{ painel.titulos }}</div></a>
+      <a class="indicador" href="#livros" data-abrir="livros" style="--ind: var(--acervo)"><div class="indicador-rotulo">Exemplares na estante</div><div class="indicador-valor">{{ painel.exemplares }}</div></a>
+      <a class="indicador" href="#pessoas" data-abrir="pessoas" style="--ind: var(--sucesso)"><div class="indicador-rotulo">Alunos e professores ativos</div><div class="indicador-valor">{{ painel.pessoas }}</div></a>
+    </div>
+
+    <div class="duas-colunas">
+      <div class="pilha">
+      <section class="card"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+          <h2 class="h-secao">Atrasados agora</h2>
+          {% if atrasos %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.atrasados') }}">Relatório por turma</a>{% endif %}
+        </div>
+        {% if atrasos %}
+        <ul class="lista-simples">
+          {% for e in atrasos[:8] %}
+          <li class="item-atraso">
+            <div class="flex-grow-1" style="min-width:0">
+              <div class="nome-principal text-truncate" title="{{ e.livro_titulo }}">{{ e.livro_titulo }}</div>
+              <div class="texto-secundario">{{ e.usuario_nome }}{% if e.usuario_turma %}, {{ e.usuario_turma }}{% endif %}</div>
+            </div>
+            <span class="selo selo-perigo">{{ -e.dias_restantes }} dia{{ '' if e.dias_restantes == -1 else 's' }} de atraso</span>
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalDevolucao" data-acao="{{ url_for('main.devolver', emprestimo_id=e.id) }}" data-livro="{{ e.livro_titulo }}" data-pessoa="{{ e.usuario_nome }}">Devolver</button>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if atrasos | length > 8 %}<p class="texto-secundario mt-2 mb-0">Mostrando 8 de {{ atrasos | length }}. <a href="#emprestimos" data-abrir="emprestimos">Ver todos os empréstimos</a></p>{% endif %}
+        {% else %}
+        <p class="estado-ok mb-0"><span class="pingo-ok" aria-hidden="true"></span>Nenhum livro atrasado. Tudo em dia.</p>
+        {% endif %}
+      </div></section>
+
+      <section class="card"><div class="card-body">
+        <h2 class="h-secao mb-2">Últimos empréstimos</h2>
+        <ul class="lista-simples">
+          {% for e in emprestimos[:6] %}
+          <li>
+            <div style="min-width:0">
+              <div class="nome-principal text-truncate" title="{{ e.livro_titulo }}">{{ e.livro_titulo }}</div>
+              <div class="texto-secundario">{{ e.usuario_nome }}, levado em {{ e.data_emprestimo[:10] }}</div>
+            </div>
+            <span class="texto-secundario text-nowrap">até {{ e.data_prevista | data_br }}</span>
+          </li>
+          {% else %}<li class="texto-secundario">Nenhum empréstimo em aberto.</li>{% endfor %}
+        </ul>
+      </div></section>
+      </div>
+      <div class="pilha">
+        <section class="card"><div class="card-body">
+          <h2 class="h-secao mb-2">Livros mais emprestados</h2>
+          <ol class="lista-simples">
+            {% for l in painel.top_livros %}<li><span class="d-flex gap-2 min-w-0"><span class="numero-rank">{{ loop.index }}</span><span class="text-truncate" title="{{ l.titulo }}">{{ l.titulo }}</span></span><span class="texto-secundario">{{ l.total }}</span></li>
+            {% else %}<li class="texto-secundario">Ainda sem empréstimos.</li>{% endfor %}
+          </ol>
+        </div></section>
+        <section class="card"><div class="card-body">
+          <h2 class="h-secao mb-2">Quem mais leu</h2>
+          <ol class="lista-simples">
+            {% for p in painel.top_leitores %}<li><span class="d-flex gap-2 align-items-center min-w-0"><span class="numero-rank">{{ loop.index }}</span><span class="text-truncate">{{ p.nome }}</span> <span class="selo">{{ p.tipo }}</span></span><span class="texto-secundario">{{ p.total }}</span></li>
+            {% else %}<li class="texto-secundario">Ainda sem empréstimos.</li>{% endfor %}
+          </ol>
+        </div></section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== EMPRÉSTIMOS ===================== -->
+  <div class="tab-pane fade" id="emprestimos" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Empréstimos</h1><p class="descricao">Livros em aberto, quem está com cada um e o prazo de devolução.</p></div>
+      <div class="acoes-pagina">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.atrasados') }}">Relatório de atrasados</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.imprimir', lista='emprestimos') }}">Imprimir</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoEmprestimo">Novo empréstimo</button>
+      </div>
+    </header>
+    <div class="barra">
+      <div class="campo-busca"><input type="search" id="busca-emprestimos" class="form-control" placeholder="Buscar por pessoa, turma ou livro" aria-label="Buscar empréstimo em aberto" autocomplete="off"></div>
+      <select id="filtro-turma" class="form-select" aria-label="Filtrar por turma"><option value="">Todas as turmas</option>{% for t in turmas_ativas %}<option>{{ t.turma }}</option>{% endfor %}<option>Professores</option></select>
+      <span class="contagem">{{ emprestimos | length }} em aberto</span>
+    </div>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Livro</th><th>Quem pegou</th><th>Emprestado em</th><th>Devolver até</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for e in emprestimos %}
+        <tr data-busca="{{ e.livro_titulo }} {{ e.usuario_nome }} {{ e.usuario_tipo }} {{ e.usuario_turma or '' }}" data-turma="{{ e.usuario_turma or ('Professores' if e.usuario_tipo == 'Professor' else '') }}">
+          <td style="min-width: 220px"><div class="nome-principal">{{ e.livro_titulo }}</div></td>
+          <td style="min-width: 200px"><div class="nome-principal">{{ e.usuario_nome }}</div><div class="texto-secundario">{{ e.usuario_tipo }}{% if e.usuario_turma %}, {{ e.usuario_turma }}{% endif %}</div></td>
+          <td class="text-nowrap">{{ e.data_emprestimo[:10] }}</td>
+          <td class="text-nowrap">
+            <div>{{ e.data_prevista | data_br }}</div>
+            {% set d = e.dias_restantes %}
+            {% if d is not none %}
+              {% if d < 0 %}<span class="selo selo-perigo">Atrasado há {{ -d }} dia{{ '' if d == -1 else 's' }}</span>
+              {% elif d == 0 %}<span class="selo selo-alerta">Vence hoje</span>
+              {% elif d <= 2 %}<span class="selo selo-alerta">Vence em {{ d }} dia{{ '' if d == 1 else 's' }}</span>
+              {% else %}<span class="texto-secundario">Faltam {{ d }} dias</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="text-end"><div class="acoes-linha">
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalDevolucao" data-acao="{{ url_for('main.devolver', emprestimo_id=e.id) }}" data-livro="{{ e.livro_titulo }}" data-pessoa="{{ e.usuario_nome }}">Devolver</button>
+            {% call menu_linha() %}
+              <li><form action="{{ url_for('main.renovar', emprestimo_id=e.id) }}" method="post" class="m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="dropdown-item"{% if e.renovacoes %} disabled{% endif %}>Renovar prazo{% if e.renovacoes %} (já renovado){% endif %}</button></form></li>
+              <li><button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#modalBaixa" data-acao="{{ url_for('main.baixa_emprestimo', emprestimo_id=e.id) }}" data-livro="{{ e.livro_titulo }}" data-pessoa="{{ e.usuario_nome }}">Perdido ou danificado</button></li>
+            {% endcall %}
+          </div></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">Nenhum livro emprestado no momento.</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ===================== RESERVAS ===================== -->
+  <div class="tab-pane fade" id="reservas" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Reservas</h1><p class="descricao">Para livros sem exemplar livre. Ao devolver, o exemplar fica separado para o primeiro da fila.</p></div>
+      <div class="acoes-pagina">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.imprimir', lista='reservas') }}">Imprimir</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaReserva">Nova reserva</button>
+      </div>
+    </header>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Livro</th><th>Pessoa</th><th>Reservado em</th><th>Situação</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for r in reservas %}
+        <tr>
+          <td><div class="nome-principal">{{ r.livro_titulo }}</div></td>
+          <td><div class="nome-principal">{{ r.usuario_nome }}</div><div class="texto-secundario">{{ r.usuario_tipo }}</div></td>
+          <td class="text-nowrap">{{ r.data_reserva | data_br }}</td>
+          <td>{% if r.status == 'Disponivel' %}<span class="selo selo-ok">Pronto para retirada</span>{% if r.data_limite %}<div class="texto-secundario mt-1">Retirar até {{ r.data_limite | data_br }}</div>{% endif %}{% else %}<span class="selo">Na fila</span>{% endif %}</td>
+          <td class="text-end"><div class="acoes-linha">
+            {% if r.status == 'Disponivel' %}<form action="{{ url_for('main.emprestar') }}" method="post" class="d-inline m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="livro_id" value="{{ r.livro_id }}"><input type="hidden" name="usuario_id" value="{{ r.usuario_id }}"><button type="submit" class="btn btn-sm btn-success">Emprestar</button></form>{% endif %}
+            <form action="{{ url_for('main.cancelar_reserva', reserva_id=r.id) }}" method="post" class="d-inline m-0" data-confirmar="Cancelar esta reserva?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button></form>
+          </div></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">Nenhuma reserva em aberto.</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ===================== LIVROS ===================== -->
+  <div class="tab-pane fade" id="livros" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Livros</h1><p class="descricao">Títulos do acervo e quantos exemplares estão disponíveis.</p></div>
+      <div class="acoes-pagina">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.imprimir', lista='acervo') }}">Imprimir</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoLivro">Cadastrar livro</button>
+      </div>
+    </header>
+    <form action="{{ url_for('main.index') }}" method="get" class="barra" role="search">
+      <div class="campo-busca"><input type="search" name="busca" value="{{ busca }}" class="form-control" placeholder="Buscar por título, autor, ISBN ou gênero" aria-label="Buscar livro"></div>
+      <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+      {% if busca %}<a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#livros">Limpar</a>{% endif %}
+      <span class="contagem">{{ livros.total }} título{{ '' if livros.total == 1 else 's' }}</span>
+    </form>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Título</th><th>Autor</th><th>ISBN</th><th>Disponibilidade</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for l in livros.itens %}
+        <tr>
+          <td style="min-width: 260px"><div class="nome-principal">{{ l.titulo }}</div>{% if l.observacao %}<div class="texto-secundario">{{ l.observacao }}</div>{% endif %}</td>
+          <td style="min-width: 180px">{{ l.autor_nome }}<div class="texto-secundario">{{ l.genero or 'Sem gênero' }}</div></td>
+          <td class="text-nowrap texto-secundario">{{ l.isbn }}</td>
+          <td class="text-nowrap">
+            <span class="selo {{ 'selo-perigo' if l.quantidade_disponivel == 0 else 'selo-ok' }}">{{ l.quantidade_disponivel }} {{ 'disponível' if l.quantidade_disponivel == 1 else 'disponíveis' }}</span>
+            {% if l.baixados %}<span class="selo selo-alerta" title="Exemplares perdidos ou danificados">{{ l.baixados }} baixa(s)</span>{% endif %}
+          </td>
+          <td class="text-end"><div class="acoes-linha">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.editar_livro', livro_id=l.id) }}">Editar</a>
+            {% call menu_linha() %}<li>{{ excluir('main.excluir_livro', l.id, 'Excluir este livro?') }}</li>{% endcall %}
+          </div></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">{% if busca %}Nenhum livro encontrado para “{{ busca }}”.{% else %}Nenhum livro cadastrado ainda. Use “Cadastrar livro” para começar.{% endif %}</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    {{ paginacao(livros, 'pl', 'livros', args) }}
+  </div>
+
+  <!-- ===================== AUTORES ===================== -->
+  <div class="tab-pane fade" id="autores" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Autores</h1><p class="descricao">Os autores são cadastrados automaticamente quando você registra um livro deles.</p></div>
+    </header>
+    <form action="{{ url_for('main.index') }}" method="get" class="barra" role="search">
+      <div class="campo-busca"><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar autor pelo nome" aria-label="Buscar autor"></div>
+      <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+      {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#autores">Limpar</a>{% endif %}
+      <span class="contagem">{{ autores.total }} autor{{ '' if autores.total == 1 else 'es' }}</span>
+    </form>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Autor</th><th>Títulos no acervo</th><th class="text-end">Livros cadastrados</th></tr></thead>
+      <tbody>
+        {% for a in autores.itens %}<tr><td class="nome-principal">{{ a.nome }}</td><td>{{ a.titulos or '—' }}</td><td class="text-end">{{ a.total_livros }}</td></tr>
+        {% else %}<tr><td colspan="3" class="vazio">{% if q %}Nenhum autor encontrado para “{{ q }}”.{% else %}Nenhum autor ainda. Cadastre um livro para criar o primeiro.{% endif %}</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    {{ paginacao(autores, 'pa', 'autores', args) }}
+  </div>
+
+  <!-- ===================== SUGESTÕES ===================== -->
+  <div class="tab-pane fade" id="sugestoes" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Sugestões de livros</h1><p class="descricao">Livros novos que poderiam entrar no acervo. Quando um deles for comprado, marque como adquirido.</p></div>
+      <div class="acoes-pagina">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.imprimir', lista='sugestoes') }}">Imprimir pendentes</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaSugestao">Nova sugestão</button>
+      </div>
+    </header>
+    <form action="{{ url_for('main.index') }}" method="get" class="barra" role="search">
+      <div class="campo-busca"><input type="search" name="qs" value="{{ qs }}" class="form-control" placeholder="Buscar por título, autor, ISBN ou quem sugeriu" aria-label="Buscar sugestão"></div>
+      <select name="ss" class="form-select" aria-label="Filtrar por situação">
+        <option value="">Todas</option>
+        <option value="Pendente" {% if ss == 'Pendente' %}selected{% endif %}>Pendentes</option>
+        <option value="Adquirida" {% if ss == 'Adquirida' %}selected{% endif %}>Adquiridas</option>
+      </select>
+      <button class="btn btn-outline-secondary" type="submit">Filtrar</button>
+      {% if qs or ss %}<a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#sugestoes">Limpar</a>{% endif %}
+      <span class="contagem">{{ sugestoes.total }} sugest{{ 'ão' if sugestoes.total == 1 else 'ões' }}</span>
+    </form>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Livro</th><th>Autor</th><th>Sugerido por</th><th>Situação</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for s in sugestoes.itens %}
+        <tr{% if s.status == 'Adquirida' %} class="linha-inativa"{% endif %}>
+          <td style="min-width: 200px"><div class="nome-principal">{{ s.titulo }}</div>
+            {% if s.isbn %}<div class="texto-secundario">ISBN {{ s.isbn }}</div>{% endif %}
+            {% if s.motivo %}<div class="texto-secundario">{{ s.motivo }}</div>{% endif %}</td>
+          <td>{{ s.autor }}</td>
+          <td>{{ s.sugerido_por or '—' }}<div class="texto-secundario">{{ s.data_sugestao | data_br }}</div></td>
+          <td class="text-nowrap"><span class="selo {{ 'selo-ok' if s.status == 'Adquirida' else 'selo-alerta' }}">{{ 'Adquirida' if s.status == 'Adquirida' else 'Pendente' }}</span></td>
+          <td class="text-end"><div class="acoes-linha">
+            <form action="{{ url_for('main.alternar_sugestao', sugestao_id=s.id) }}" method="post" class="d-inline m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm text-nowrap {{ 'btn-outline-secondary' if s.status == 'Adquirida' else 'btn-success' }}">{{ 'Reabrir' if s.status == 'Adquirida' else 'Marcar adquirida' }}</button></form>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.editar_sugestao', sugestao_id=s.id) }}">Editar</a>
+            {% call menu_linha() %}
+              <li><form action="{{ url_for('main.excluir_sugestao', sugestao_id=s.id) }}" method="post" class="m-0" data-confirmar="Excluir esta sugestão?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="dropdown-item text-danger">Excluir</button></form></li>
+            {% endcall %}
+          </div></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">{% if qs or ss %}Nenhuma sugestão encontrada com este filtro.{% else %}Nenhuma sugestão ainda. Use “Nova sugestão” para registrar o primeiro livro.{% endif %}</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    {{ paginacao(sugestoes, 'ps', 'sugestoes', args) }}
+  </div>
+
+  <!-- ===================== PESSOAS ===================== -->
+  <div class="tab-pane fade" id="pessoas" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Alunos e professores</h1><p class="descricao">Cadastros de quem pode pegar livros emprestados.</p></div>
+      <div class="acoes-pagina">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.virada') }}">Virada de ano</a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaPessoa">Cadastrar pessoa</button>
+      </div>
+    </header>
+    <form action="{{ url_for('main.index') }}" method="get" class="barra" role="search">
+      <div class="campo-busca"><input type="search" name="qp" value="{{ qp }}" class="form-control" placeholder="Buscar por nome, e-mail, turma ou matrícula" aria-label="Buscar aluno ou professor"></div>
+      <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+      {% if qp %}<a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#pessoas">Limpar</a>{% endif %}
+      <span class="contagem">{{ pessoas.total }} cadastro{{ '' if pessoas.total == 1 else 's' }}</span>
+    </form>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Turma ou disciplina</th><th>Matrícula</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% for u in pessoas.itens %}
+        <tr{% if not u.ativo %} class="linha-inativa"{% endif %}>
+          <td style="min-width: 240px"><div class="nome-principal">{{ u.nome }}{% if not u.ativo %} <span class="selo">Arquivado</span>{% endif %}</div><div class="texto-secundario">{{ u.email }}</div></td>
+          <td><span class="selo {{ 'selo-azul' if u.tipo == 'Professor' else '' }}">{{ u.tipo }}</span></td>
+          <td>{{ (u.turma if u.tipo == 'Aluno' else u.disciplina) or '—' }}</td>
+          <td class="texto-secundario">{{ u.matricula or '—' }}</td>
+          <td class="text-end"><div class="acoes-linha">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.leitura_pessoa', pessoa_id=u.id) }}">Leitura</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.editar_pessoa', pessoa_id=u.id) }}">Editar</a>
+            {% call menu_linha() %}
+              <li><form action="{{ url_for('main.alternar_pessoa', pessoa_id=u.id) }}" method="post" class="m-0"{% if u.ativo %} data-confirmar="Arquivar {{ u.nome }}? O histórico fica guardado e as reservas dessa pessoa são canceladas."{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="dropdown-item">{% if not u.ativo %}Reativar{% elif u.tipo == 'Aluno' %}Arquivar (saiu da escola){% else %}Arquivar{% endif %}</button></form></li>
+              <li>{{ excluir('main.excluir_pessoa', u.id, 'Excluir este cadastro?') }}</li>
+            {% endcall %}
+          </div></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">{% if qp %}Nenhum cadastro encontrado para “{{ qp }}”.{% else %}Nenhum aluno ou professor cadastrado ainda.{% endif %}</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    {{ paginacao(pessoas, 'pp', 'pessoas', args) }}
+  </div>
+
+  <!-- ===================== HISTÓRICO ===================== -->
+  <div class="tab-pane fade" id="historico" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Histórico</h1><p class="descricao">Todos os empréstimos, em aberto ou já devolvidos.</p></div>
+    </header>
+    <form action="{{ url_for('main.index') }}" method="get" class="barra" role="search">
+      <div class="campo-busca"><input type="search" name="h" value="{{ h }}" class="form-control" placeholder="Buscar por livro ou pessoa" aria-label="Buscar no histórico"></div>
+      <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+      {% if h %}<a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}#historico">Limpar</a>{% endif %}
+    </form>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>Livro</th><th>Pessoa</th><th>Emprestado em</th><th>Prazo</th><th>Devolvido em</th><th>Situação</th><th>Observações</th></tr></thead>
+      <tbody>
+        {% for x in historico.itens %}
+        <tr>
+          <td style="min-width: 200px"><div class="nome-principal">{{ x.livro_titulo }}</div></td>
+          <td>{{ x.usuario_nome }} <div class="texto-secundario">{{ x.usuario_tipo }}</div></td>
+          <td class="text-nowrap">{{ x.data_emprestimo[:10] }}</td>
+          <td class="text-nowrap">{{ x.data_prevista | data_br }}</td>
+          <td class="text-nowrap">{{ x.data_devolucao | data_br }}</td>
+          <td>
+            {% if x.status == 'Ativo' %}
+              {% if x.data_prevista and x.data_prevista < hoje %}<span class="selo selo-perigo">Em aberto, atrasado</span>{% else %}<span class="selo">Em aberto</span>{% endif %}
+            {% elif x.data_devolucao and x.data_prevista and x.data_devolucao > x.data_prevista %}<span class="selo selo-alerta">Devolvido com atraso</span>
+            {% else %}<span class="selo selo-ok">Devolvido</span>{% endif %}
+            {% if x.estado_devolucao and x.estado_devolucao != 'Bom' %} <span class="selo selo-alerta">{{ x.estado_devolucao }}</span>{% endif %}
+          </td>
+          <td class="texto-secundario">{{ x.observacao or '' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="7" class="vazio">Nenhum empréstimo encontrado.</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    {{ paginacao(historico, 'ph', 'historico', args) }}
+  </div>
+
+  <!-- ===================== COMPORTAMENTO ===================== -->
+  <div class="tab-pane fade" id="comportamento" role="tabpanel">
+    {% set g = ranking.geral %}
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Comportamento</h1><p class="descricao">Como as devoluções acontecem, por pessoa e por turma.</p></div>
+    </header>
+    <div class="indicadores quatro mb-4">
+      <div class="indicador"><div class="indicador-rotulo">Devoluções analisadas</div><div class="indicador-valor">{{ g.entregues }}</div></div>
+      <div class="indicador"><div class="indicador-rotulo">Entregues no prazo</div><div class="indicador-valor">{% if g.entregues %}{{ g.pct_prazo }}%{% else %}—{% endif %}</div></div>
+      <div class="indicador"><div class="indicador-rotulo">Voltaram em bom estado</div><div class="indicador-valor">{% if g.entregues %}{{ g.pct_bom }}%{% else %}—{% endif %}</div></div>
+      <div class="indicador"><div class="indicador-rotulo">Entregas certas</div><div class="indicador-valor">{% if g.entregues %}{{ g.pct_certas }}%{% else %}—{% endif %}</div><div class="texto-secundario">no prazo e em bom estado</div></div>
+    </div>
+
+    <div class="grupo-rankings">
+      <h2 class="h-secao mb-3">Pessoas</h2>
+      <div class="grade-rankings">
+        {{ cartao_rank('Mais atrasos', 'Quem mais entrega fora do prazo', ranking.pessoas_atrasos, 'pct_atrasos', 'alerta', 'Ninguém atrasou ainda, ou faltam devoluções.') }}
+        {{ cartao_rank('Mais defeitos', 'Quem mais devolve livros com defeito', ranking.pessoas_defeitos, 'pct_defeitos', 'perigo', 'Nenhum livro voltou com defeito.') }}
+        {{ cartao_rank('Entregam tudo certo', 'No prazo e em bom estado', ranking.pessoas_certas, 'pct_certas', 'ok', 'Ainda sem dados suficientes.') }}
+      </div>
+    </div>
+
+    <div class="grupo-rankings">
+      <h2 class="h-secao mb-3">Turmas</h2>
+      <div class="grade-rankings">
+        <section class="card tom-azul"><div class="card-body">
+          <h3 class="h-secao">Mais pegam livros</h3>
+          <p class="texto-secundario mt-1 mb-2">Empréstimos feitos pelos alunos de cada turma</p>
+          {% set maximo = (ranking.turmas_emprestam | map(attribute='total') | list | max) if ranking.turmas_emprestam else 1 %}
+          {% for t in ranking.turmas_emprestam %}
+          <div class="item-rank">
+            <div class="linha-rank"><span class="rank-nome">{{ t.nome }}</span><span class="rank-valor">{{ t.total }}</span></div>
+            <div class="barra-progresso" role="progressbar" aria-valuenow="{{ t.total }}" aria-valuemin="0" aria-valuemax="{{ maximo }}"><span style="width: {{ (100 * t.total / maximo) | round | int }}%"></span></div>
+            <div class="texto-secundario">{{ t.alunos }} aluno(s) ativo(s), média de {{ t.media }} por aluno</div>
+          </div>
+          {% else %}<p class="texto-secundario mb-0">Ainda sem empréstimos de alunos.</p>{% endfor %}
+        </div></section>
+        {{ cartao_rank('Precisam melhorar', 'Mais entregas com atraso ou defeito', ranking.turmas_problemas, 'pct_problemas', 'perigo', 'Nenhuma turma com problemas, ou faltam devoluções.') }}
+        {{ cartao_rank('Turmas exemplares', 'Entregam no prazo e bem guardado', ranking.turmas_certas, 'pct_certas', 'ok', 'Ainda sem dados suficientes.') }}
+      </div>
+    </div>
+
+    <details class="texto-secundario">
+      <summary>Como é calculado</summary>
+      <p class="mt-2 mb-0">Considera só livros já devolvidos, e só entram pessoas e turmas com pelo menos {{ ranking.min_entregas }} devoluções. <strong>Certa</strong> é a entrega no prazo e sem defeito (o livro perdido conta como defeito). Empréstimos antigos, sem estado registrado, contam como sem defeito. As turmas somam os alunos que hoje estão nelas.</p>
+    </details>
+  </div>
+
+  <!-- ===================== MAIS SUGERIDOS ===================== -->
+  <div class="tab-pane fade" id="maissugeridos" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Mais sugeridos</h1><p class="descricao">Livros novos que mais pessoas pediram para a biblioteca. Conta só os pedidos pendentes: quando um livro é marcado como adquirido, ele sai desta lista.</p></div>
+      <div class="acoes-pagina"><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaSugestao">Nova sugestão</button></div>
+    </header>
+    <div class="tabela-caixa"><div class="table-responsive"><table class="table align-middle">
+      <thead><tr><th>#</th><th>Livro</th><th>Pedidos</th><th>Quem pediu</th><th><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {% set maximo = mais_sugeridos[0].votos if mais_sugeridos else 1 %}
+        {% for g in mais_sugeridos %}
+        <tr>
+          <td class="numero-rank">{{ loop.index }}</td>
+          <td style="min-width: 220px"><div class="nome-principal">{{ g.titulo }}</div><div class="texto-secundario">{{ g.autor }}{% if g.isbn %} · ISBN {{ g.isbn }}{% endif %}</div></td>
+          <td style="min-width: 120px"><div class="rank-valor">{{ g.votos }}</div>
+            <div class="barra-progresso" role="progressbar" aria-valuenow="{{ g.votos }}" aria-valuemin="0" aria-valuemax="{{ maximo }}"><span style="width: {{ (100 * g.votos / maximo) | round | int }}%"></span></div></td>
+          <td class="texto-secundario" style="min-width: 160px">{% if g.pedidos %}{{ g.pedidos | join(', ') }}{% endif %}{% if g.sem_nome %}{% if g.pedidos %} + {% endif %}{{ g.sem_nome }} sem identificação{% endif %}</td>
+          <td class="text-end text-nowrap"><form action="{{ url_for('main.adquirir_sugestoes') }}" method="post" class="d-inline m-0" data-confirmar="Marcar {{ 'os ' ~ g.votos ~ ' pedidos' if g.votos > 1 else 'o pedido' }} deste livro como adquirido?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="ids" value="{{ g.ids | join(',') }}"><button type="submit" class="btn btn-sm btn-success text-nowrap">Marcar adquirida</button></form></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="vazio">Nenhuma sugestão pendente. Registre os pedidos em “Sugestões de livros” e o ranking aparece aqui.</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+    <details class="texto-secundario mt-3">
+      <summary>Como é calculado</summary>
+      <p class="mt-2 mb-0">Cada sugestão registrada é um pedido. O mesmo livro (mesmo ISBN, ou mesmo título e autor) pedido por pessoas diferentes soma pedidos. A mesma pessoa não conta duas vezes pelo mesmo livro. Aparecem até 20 livros, do mais pedido ao menos; em caso de empate, o pedido mais recente vem primeiro.</p>
+    </details>
+  </div>
+
+  <!-- ===================== GÊNEROS LIDOS ===================== -->
+  <div class="tab-pane fade" id="generos" role="tabpanel">
+    <header class="cabecalho-pagina">
+      <div><h1 class="titulo-pagina">Gêneros lidos</h1><p class="descricao">O que mais sai da estante, por gênero. Retrato da biblioteca toda, sem nomes de pessoas.</p></div>
+    </header>
+    <div class="indicadores quatro mb-4">
+      <div class="indicador"><div class="indicador-rotulo">Gênero mais lido</div><div class="indicador-valor" style="font-size: 1.35rem">{{ generos.itens[0].genero if generos.itens else '—' }}</div>{% if generos.itens %}<div class="texto-secundario">{{ generos.itens[0].pct }}% dos empréstimos</div>{% endif %}</div>
+      <div class="indicador"><div class="indicador-rotulo">Empréstimos classificados</div><div class="indicador-valor">{{ generos.total }}</div><div class="texto-secundario">de {{ generos.total + generos.sem_genero }} no total</div></div>
+      <div class="indicador"><div class="indicador-rotulo">Gêneros em uso</div><div class="indicador-valor">{{ generos.itens | length }}</div></div>
+      <div class="indicador"><div class="indicador-rotulo">Livros sem gênero</div><div class="indicador-valor">{{ generos.livros_sem_genero }}</div><div class="texto-secundario">de {{ generos.titulos }} títulos</div></div>
+    </div>
+    {% if generos.livros_sem_genero %}
+    <div class="alert alert-warning">{{ generos.livros_sem_genero }} livro(s) ainda não têm gênero e ficam fora do ranking{% if generos.sem_genero %} ({{ generos.sem_genero }} empréstimo(s) deles não foram contados){% endif %}. Defina em <strong>Livros</strong>, botão <strong>Editar</strong>.</div>
+    {% endif %}
+    <section class="card tom-azul mb-4"><div class="card-body">
+      <h2 class="h-secao">Ranking de gêneros</h2>
+      <p class="texto-secundario mt-1 mb-2">Empréstimos por gênero, do mais ao menos lido</p>
+      {% set maximo = generos.itens[0].emprestimos if generos.itens else 1 %}
+      {% for x in generos['itens'] %}
+      <div class="item-rank">
+        <div class="linha-rank"><span class="rank-nome">{{ loop.index }}. {{ x.genero }}</span><span class="rank-valor">{{ x.pct }}%</span></div>
+        <div class="barra-progresso" role="progressbar" aria-valuenow="{{ x.emprestimos }}" aria-valuemin="0" aria-valuemax="{{ maximo }}"><span style="width: {{ (100 * x.emprestimos / maximo) | round | int }}%"></span></div>
+        <div class="texto-secundario">{{ x.emprestimos }} empréstimo(s), {{ x.titulos }} livro(s) diferente(s), {{ x.leitores }} leitor(es)</div>
+      </div>
+      {% else %}<p class="texto-secundario mb-0">Ainda não há empréstimos de livros com gênero. Defina o gênero dos livros em <strong>Livros</strong> e o ranking aparece aqui.</p>{% endfor %}
+    </div></section>
+    <p class="texto-secundario">Quer saber o que uma pessoa em particular costuma ler? Abra <strong>Alunos e professores</strong> e use o botão <strong>Leitura</strong> na linha dela. Ficou separado de propósito: aqui o foco é o acervo.</p>
+    <details class="texto-secundario">
+      <summary>Como é calculado</summary>
+      <p class="mt-2 mb-0">Conta empréstimos, devolvidos ou ainda em aberto, de livros que têm gênero. “Lido” aqui quer dizer “levado emprestado”: o sistema não sabe se a pessoa terminou o livro. Renovações e reservas não contam como novo empréstimo. “Leitores” é o número de pessoas diferentes que pegaram livros do gênero.</p>
+    </details>
+  </div>
+
+</div>
+</div>
+
+<!-- ===================== JANELAS DE CADASTRO ===================== -->
+<div class="modal fade" id="modalNovoLivro" tabindex="-1" aria-labelledby="tituloNovoLivro">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form action="{{ url_for('main.add_livro') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h2 class="modal-title" id="tituloNovoLivro">Cadastrar livro</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body">
+        <div class="grade-form">
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="l-titulo">Título</label><input id="l-titulo" name="titulo" class="form-control" value="{{ rascunho_livro.get('titulo', '') }}" required></div>
+          <div class="mb-3"><label class="form-label" for="l-isbn">ISBN</label><input id="l-isbn" name="isbn" class="form-control" value="{{ rascunho_livro.get('isbn', '') }}" required><div class="form-text">Outro exemplar do mesmo livro? Use o mesmo ISBN, título e autor: os exemplares são somados.</div></div>
+          <div class="mb-3"><label class="form-label" for="l-qtd">Exemplares</label><input id="l-qtd" type="number" name="quantidade" class="form-control" min="1" value="{{ rascunho_livro.get('quantidade', 1) }}" required></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="l-autor">Autor</label>
+            <input id="l-autor" name="autor" class="form-control" list="lista-autores" autocomplete="off" value="{{ rascunho_livro.get('autor', ultimo_autor) }}" required>
+            <datalist id="lista-autores">{% for a in todos_autores %}<option value="{{ a.nome }}">{% endfor %}</datalist>
+            <div class="form-text">Se o autor ainda não existir, ele é cadastrado junto com o livro.</div></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="l-genero">Gênero (opcional)</label>
+            <select id="l-genero" name="genero" class="form-select"><option value="">Sem gênero</option>{% set gsel = rascunho_livro.get('genero', ultimo_genero) %}{% for g in generos_lista %}<option{% if g == gsel %} selected{% endif %}>{{ g }}</option>{% endfor %}</select>
+            <div class="form-text">Livro sem gênero não entra na estatística de gêneros mais lidos.</div></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="l-obs">Observações (opcional)</label><input id="l-obs" name="observacao" class="form-control" placeholder="Ex.: edição de 1998" value="{{ rascunho_livro.get('observacao', '') }}"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Salvar livro</button></div>
+    </form>
+  </div></div>
+</div>
+
+<div class="modal fade" id="modalNovaSugestao" tabindex="-1" aria-labelledby="tituloNovaSugestao">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form action="{{ url_for('main.add_sugestao') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h2 class="modal-title" id="tituloNovaSugestao">Nova sugestão de livro</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body">
+        <div class="grade-form">
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="s-titulo">Título</label><input id="s-titulo" name="titulo" class="form-control" value="{{ rascunho_sugestao.get('titulo', '') }}" required></div>
+          <div class="mb-3"><label class="form-label" for="s-autor">Autor</label><input id="s-autor" name="autor" class="form-control" list="lista-autores-sug" autocomplete="off" value="{{ rascunho_sugestao.get('autor', '') }}" required>
+            <datalist id="lista-autores-sug">{% for a in todos_autores %}<option value="{{ a.nome }}">{% endfor %}</datalist></div>
+          <div class="mb-3"><label class="form-label" for="s-isbn">ISBN (opcional)</label><input id="s-isbn" name="isbn" class="form-control" value="{{ rascunho_sugestao.get('isbn', '') }}"></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="s-por">Sugerido por (opcional)</label><input id="s-por" name="sugerido_por" class="form-control" placeholder="Ex.: Prof. Helena, 9º ano A, pedido de um aluno" value="{{ rascunho_sugestao.get('sugerido_por', '') }}"></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="s-motivo">Por que esse livro? (opcional)</label><input id="s-motivo" name="motivo" class="form-control" placeholder="Ex.: leitura obrigatória do vestibular" value="{{ rascunho_sugestao.get('motivo', '') }}"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Salvar sugestão</button></div>
+    </form>
+  </div></div>
+</div>
+
+<div class="modal fade" id="modalNovaPessoa" tabindex="-1" aria-labelledby="tituloNovaPessoa">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form action="{{ url_for('main.add_pessoa') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h2 class="modal-title" id="tituloNovaPessoa">Cadastrar aluno ou professor</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body">
+        <div class="grade-form">
+          <div class="mb-3"><label class="form-label" for="u-tipo">Tipo</label>
+            <select id="u-tipo" name="tipo" class="form-select" required><option {% if rascunho_pessoa.get('tipo') == 'Aluno' %}selected{% endif %}>Aluno</option><option {% if rascunho_pessoa.get('tipo') == 'Professor' %}selected{% endif %}>Professor</option></select></div>
+          <div class="mb-3"><label class="form-label" for="u-nome">Nome completo</label><input id="u-nome" name="nome" class="form-control" value="{{ rascunho_pessoa.get('nome', '') }}" required></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="u-email">E-mail</label><input id="u-email" type="email" name="email" class="form-control" value="{{ rascunho_pessoa.get('email', '') }}" required></div>
+          <div class="mb-3" id="campo-matricula"><label class="form-label" for="u-matricula">Matrícula (opcional)</label><input id="u-matricula" name="matricula" class="form-control" value="{{ rascunho_pessoa.get('matricula', '') }}"></div>
+          <div class="mb-3" id="campo-turma"><label class="form-label" for="u-serie">Série e turma</label>
+            <div class="campo-serie"><select id="u-serie" name="serie" class="form-select" required>{% for s in series %}<option {% if s == rascunho_pessoa.get('serie', ultima_serie) %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+            <select id="u-letra" name="letra" class="form-select" aria-label="Turma">{% set lsel = rascunho_pessoa.get('letra', ultima_letra) %}{% for l in letras %}<option value="{{ l }}"{% if l == lsel %} selected{% endif %}>Turma {{ l }}</option>{% endfor %}</select></div></div>
+          <div class="mb-3 d-none" id="campo-disciplina"><label class="form-label" for="u-disciplina">Disciplina</label><input id="u-disciplina" name="disciplina" class="form-control" placeholder="Ex.: Matemática" value="{{ rascunho_pessoa.get('disciplina', '') }}"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Salvar cadastro</button></div>
+    </form>
+  </div></div>
+</div>
+
+<div class="modal fade" id="modalNovoEmprestimo" tabindex="-1" aria-labelledby="tituloNovoEmprestimo">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title" id="tituloNovoEmprestimo">Novo empréstimo</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    {% if cadastro_ok %}
+    <form action="{{ url_for('main.emprestar') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="grade-form">
+          <div class="mb-3"><label class="form-label" for="e-busca-pessoa">Buscar pessoa</label><input id="e-busca-pessoa" type="search" class="form-control" placeholder="Nome, turma ou matrícula" autocomplete="off"></div>
+          <div class="mb-3"><label class="form-label" for="e-usuario">Aluno ou professor</label>
+            <select id="e-usuario" name="usuario_id" class="form-select" required>
+              {% for u in usuarios if u.ativo %}<option value="{{ u.id }}">{{ u.nome }} ({{ u.tipo }}{% if u.turma %}, {{ u.turma }}{% endif %}{% if u.matricula %}, mat. {{ u.matricula }}{% endif %})</option>{% endfor %}
+            </select></div>
+          <div class="mb-3"><label class="form-label" for="e-busca-livro">Buscar livro</label><input id="e-busca-livro" type="search" class="form-control" placeholder="Título, autor ou ISBN" autocomplete="off"></div>
+          <div class="mb-3"><label class="form-label" for="e-livro">Livro</label>
+            <select id="e-livro" name="livro_id" class="form-select" required>
+              {% for l in todos_livros %}<option value="{{ l.id }}" {% if l.quantidade_disponivel == 0 %}disabled{% endif %}>{{ l.titulo }} | {{ l.autor_nome }} | ISBN {{ l.isbn }} ({{ l.quantidade_disponivel }} disp.)</option>{% endfor %}
+            </select></div>
+          <div class="mb-3 campo-inteiro"><label class="form-label" for="e-obs">Observação (opcional)</label><input id="e-obs" name="observacao" class="form-control" placeholder="Ex.: capa solta"></div>
+        </div>
+        <p class="form-text mb-0">Prazo de devolução: {{ prazos.Aluno }} dias para alunos e {{ prazos.Professor }} para professores.</p>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Registrar empréstimo</button></div>
+    </form>
+    {% else %}
+    <div class="modal-body"><p class="mb-0">Cadastre ao menos um aluno ou professor e um livro para registrar empréstimos.</p></div>
+    {% endif %}
+  </div></div>
+</div>
+
+<div class="modal fade" id="modalNovaReserva" tabindex="-1" aria-labelledby="tituloNovaReserva">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title" id="tituloNovaReserva">Nova reserva</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    {% if cadastro_ok %}
+    <form action="{{ url_for('main.reservar') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <p class="texto-secundario">Cada pessoa pode ter uma reserva por vez. Só é possível reservar quando não há exemplar livre.</p>
+        <div class="grade-form">
+          <div class="mb-3"><label class="form-label" for="r-busca-pessoa">Buscar pessoa</label><input id="r-busca-pessoa" type="search" class="form-control" placeholder="Nome, turma ou matrícula" autocomplete="off"></div>
+          <div class="mb-3"><label class="form-label" for="r-usuario">Aluno ou professor</label>
+            <select id="r-usuario" name="usuario_id" class="form-select" required>
+              {% for u in usuarios if u.ativo %}<option value="{{ u.id }}">{{ u.nome }} ({{ u.tipo }}{% if u.turma %}, {{ u.turma }}{% endif %}{% if u.matricula %}, mat. {{ u.matricula }}{% endif %})</option>{% endfor %}
+            </select></div>
+          <div class="mb-3"><label class="form-label" for="r-busca-livro">Buscar livro</label><input id="r-busca-livro" type="search" class="form-control" placeholder="Título, autor ou ISBN" autocomplete="off"></div>
+          <div class="mb-3"><label class="form-label" for="r-livro">Livro</label>
+            <select id="r-livro" name="livro_id" class="form-select" required>
+              {% for l in todos_livros %}<option value="{{ l.id }}">{{ l.titulo }} ({{ l.quantidade_disponivel }} disponíveis)</option>{% endfor %}
+            </select></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Reservar</button></div>
+    </form>
+    {% else %}
+    <div class="modal-body"><p class="mb-0">Cadastre pessoas e livros primeiro.</p></div>
+    {% endif %}
+  </div></div>
+</div>
+
+<!-- ===================== JANELAS DE AÇÃO ===================== -->
+<div class="modal fade" id="modalDevolucao" tabindex="-1" aria-labelledby="tituloDevolucao">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="formDevolucao" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h2 class="modal-title" id="tituloDevolucao">Devolver livro</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body">
+        <p id="resumoDevolucao" class="nome-principal"></p>
+        <fieldset class="lista-opcoes mb-3">
+          <legend class="visually-hidden">Estado do livro</legend>
+          <div class="form-check mb-2"><input class="form-check-input" type="radio" name="estado" id="estado-bom" value="Bom" checked><label class="form-check-label" for="estado-bom">Voltou em bom estado</label></div>
+          <div class="form-check mb-0"><input class="form-check-input" type="radio" name="estado" id="estado-defeito" value="Com defeito"><label class="form-check-label" for="estado-defeito">Voltou com defeito (rasgado, riscado, molhado...)</label></div>
+        </fieldset>
+        <div class="mb-0"><label class="form-label" for="obs-devolucao">Observação (opcional)</label><input id="obs-devolucao" name="observacao" class="form-control"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Confirmar devolução</button></div>
+    </form>
+  </div></div>
+</div>
+
+<div class="modal fade" id="modalBaixa" tabindex="-1" aria-labelledby="tituloBaixa">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="formBaixa" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h2 class="modal-title" id="tituloBaixa">Livro perdido ou danificado</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body">
+        <p id="resumoBaixa" class="nome-principal"></p>
+        <p class="texto-secundario">O empréstimo é encerrado e o exemplar <strong>não volta ao estoque</strong>. O registro fica guardado.</p>
+        <label class="form-label" for="obs-baixa-emp">O que aconteceu? (opcional)</label><input id="obs-baixa-emp" name="observacao" class="form-control">
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">Dar baixa</button></div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const params = new URLSearchParams(location.search);
+
+  // Abre a aba certa depois de buscar ou de salvar algo
+  const alvo = location.hash || (params.has("q") ? "#autores" : params.has("busca") ? "#livros" : params.has("h") ? "#historico" : params.has("qp") ? "#pessoas" : params.has("qs") ? "#sugestoes" : "");
+  const botao = alvo && document.querySelector(`[data-bs-target="${alvo}"]`);
+  if (botao) bootstrap.Tab.getOrCreateInstance(botao).show();
+
+  // Cadastro em sequência: depois de salvar ou com erro, a janela certa volta aberta com o cursor no primeiro campo
+  const janelas = {
+    livro: ["modalNovoLivro", "l-titulo"],
+    pessoa: ["modalNovaPessoa", "u-nome"],
+    sugestao: ["modalNovaSugestao", "s-titulo"],
+    emprestimo: ["modalNovoEmprestimo", "e-busca-pessoa"],
+    reserva: ["modalNovaReserva", "r-busca-pessoa"],
+  };
+  const novo = params.get("novo");
+  if (novo && janelas[novo]) {
+    const [idJanela, idCampo] = janelas[novo];
+    const janela = document.getElementById(idJanela);
+    if (janela) {
+      janela.addEventListener("shown.bs.modal", () => { const c = document.getElementById(idCampo); if (c) c.focus(); }, { once: true });
+      bootstrap.Modal.getOrCreateInstance(janela).show();
+    }
+    // Tira o parâmetro da barra de endereço, para a janela não reabrir ao recarregar a página
+    params.delete("novo");
+    const restante = params.toString();
+    history.replaceState(null, "", location.pathname + (restante ? "?" + restante : "") + location.hash);
+  }
+
+  // Busca nos empréstimos em aberto (por pessoa ou livro, sem diferenciar acentos)
+  const semAcento = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const buscaEmp = document.getElementById("busca-emprestimos");
+  const filtroTurma = document.getElementById("filtro-turma");
+  function filtrarEmprestimos() {
+    const termo = semAcento(buscaEmp.value.trim());
+    document.querySelectorAll("#emprestimos tr[data-busca]").forEach(l => {
+      const combina = semAcento(l.dataset.busca).includes(termo) && (!filtroTurma.value || l.dataset.turma === filtroTurma.value);
+      l.classList.toggle("d-none", !combina);
+    });
+  }
+  if (buscaEmp) { buscaEmp.addEventListener("input", filtrarEmprestimos); filtroTurma.addEventListener("change", filtrarEmprestimos); }
+
+  // Janela de devolução: preenche livro e pessoa do empréstimo escolhido
+  document.getElementById("modalDevolucao").addEventListener("show.bs.modal", ev => {
+    const b = ev.relatedTarget;
+    document.getElementById("formDevolucao").action = b.dataset.acao;
+    document.getElementById("resumoDevolucao").textContent = b.dataset.livro + " (" + b.dataset.pessoa + ")";
+    document.getElementById("estado-bom").checked = true;
+    document.getElementById("obs-devolucao").value = "";
+  });
+
+  // Janela de baixa (livro perdido ou danificado)
+  document.getElementById("modalBaixa").addEventListener("show.bs.modal", ev => {
+    const b = ev.relatedTarget;
+    document.getElementById("formBaixa").action = b.dataset.acao;
+    document.getElementById("resumoBaixa").textContent = b.dataset.livro + " (" + b.dataset.pessoa + ")";
+    document.getElementById("obs-baixa-emp").value = "";
+  });
+
+  // Turma para aluno, disciplina para professor
+  const tipo = document.getElementById("u-tipo");
+  function atualizarTipo() {
+    const aluno = tipo.value === "Aluno";
+    document.getElementById("campo-turma").classList.toggle("d-none", !aluno);
+    document.getElementById("campo-matricula").classList.toggle("d-none", !aluno);
+    document.getElementById("campo-disciplina").classList.toggle("d-none", aluno);
+    document.getElementById("u-serie").required = aluno;
+    document.getElementById("u-disciplina").required = !aluno;
+  }
+  tipo.addEventListener("change", atualizarTipo); atualizarTipo();
+
+  // Busca ao vivo: filtra a lista de pessoas ou de livros enquanto a equipe digita
+  function ligarBusca(campoId, selectId) {
+    const campo = document.getElementById(campoId), lista = document.getElementById(selectId);
+    if (!campo || !lista) return;
+    const todas = Array.from(lista.options).map(o => ({ valor: o.value, texto: o.text, desativada: o.disabled }));
+    campo.addEventListener("input", () => {
+      const termo = campo.value.trim().toLowerCase();
+      lista.innerHTML = "";
+      todas.filter(o => o.texto.toLowerCase().includes(termo)).forEach(o => {
+        const opcao = new Option(o.texto, o.valor); opcao.disabled = o.desativada; lista.add(opcao);
+      });
+      const livre = Array.from(lista.options).find(o => !o.disabled);
+      if (livre) lista.value = livre.value;
+    });
+  }
+  [["e-busca-pessoa", "e-usuario"], ["e-busca-livro", "e-livro"], ["r-busca-pessoa", "r-usuario"], ["r-busca-livro", "r-livro"]]
+    .forEach(([campo, lista]) => ligarBusca(campo, lista));
+</script>
+{% endblock %}
